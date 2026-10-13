@@ -21,3 +21,7 @@ native <methods>;
 
 # Reprint
 -keep class com.github.ajalt.reprint.module.** { *; }
+
+# SQLCipher
+-keep class net.sqlcipher.** { *; }
+-dontwarn net.sqlcipher.**

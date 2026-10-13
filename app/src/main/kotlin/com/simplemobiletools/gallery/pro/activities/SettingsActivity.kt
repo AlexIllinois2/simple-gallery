@@ -56,6 +56,7 @@ class SettingsActivity : SimpleActivity() {
         setupChangeDateTimeFormat()
         setupFileLoadingPriority()
         setupManageIncludedFolders()
+        setupManageIncludedDBs()
         setupManageExcludedFolders()
         setupManageHiddenFolders()
         setupSearchAllFiles()
@@ -216,6 +217,12 @@ class SettingsActivity : SimpleActivity() {
             handleExcludedFolderPasswordProtection {
                 startActivity(Intent(this, ExcludedFoldersActivity::class.java))
             }
+        }
+    }
+
+    private fun setupManageIncludedDBs() {
+        binding.settingsManageIncludedDbsHolder.setOnClickListener {
+            startActivity(Intent(this, IncludedDBsActivity::class.java))
         }
     }
 

@@ -14,7 +14,9 @@ import com.simplemobiletools.gallery.pro.extensions.config
 
 class ManageFoldersAdapter(
     activity: BaseSimpleActivity, var folders: ArrayList<String>, val isShowingExcludedFolders: Boolean, val listener: RefreshRecyclerViewListener?,
-    recyclerView: MyRecyclerView, itemClick: (Any) -> Unit
+    recyclerView: MyRecyclerView,
+    val allowConvertToDb: Boolean = false, val convertListener: ((folder: String) -> Unit)? = null,
+    itemClick: (Any) -> Unit
 ) : MyRecyclerViewAdapter(activity, recyclerView, itemClick) {
 
     private val config = activity.config
@@ -23,13 +25,19 @@ class ManageFoldersAdapter(
         setupDragListener(true)
     }
 
-    override fun getActionMenuId() = com.simplemobiletools.commons.R.menu.cab_remove_only
+    override fun getActionMenuId() = if (allowConvertToDb) {
+        com.simplemobiletools.gallery.pro.R.menu.cab_manage_included_folders
+    } else {
+        com.simplemobiletools.commons.R.menu.cab_remove_only
+    }
 
     override fun prepareActionMode(menu: Menu) {}
 
     override fun actionItemPressed(id: Int) {
         when (id) {
             com.simplemobiletools.commons.R.id.cab_remove -> removeSelection()
+            com.simplemobiletools.gallery.pro.R.id.cab_remove -> removeSelection()
+            com.simplemobiletools.gallery.pro.R.id.cab_convert_to_db -> convertSelection()
         }
     }
 
@@ -91,9 +99,14 @@ class ManageFoldersAdapter(
             setOnMenuItemClickListener { item ->
                 val eventTypeId = folder.hashCode()
                 when (item.itemId) {
-                    com.simplemobiletools.commons.R.id.cab_remove -> {
+                    com.simplemobiletools.commons.R.id.cab_remove, com.simplemobiletools.gallery.pro.R.id.cab_remove -> {
                         executeItemMenuOperation(eventTypeId) {
                             removeSelection()
+                        }
+                    }
+                    com.simplemobiletools.gallery.pro.R.id.cab_convert_to_db -> {
+                        executeItemMenuOperation(eventTypeId) {
+                            convertSelection()
                         }
                     }
                 }
@@ -107,6 +120,12 @@ class ManageFoldersAdapter(
         selectedKeys.clear()
         selectedKeys.add(eventTypeId)
         callback()
+    }
+
+    private fun convertSelection() {
+        getSelectedItems().firstOrNull()?.let {
+            convertListener?.invoke(it)
+        }
     }
 
     private fun removeSelection() {

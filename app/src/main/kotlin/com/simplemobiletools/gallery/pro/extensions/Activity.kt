@@ -43,6 +43,7 @@ import com.simplemobiletools.gallery.pro.dialogs.PickDirectoryDialog
 import com.simplemobiletools.gallery.pro.dialogs.ResizeMultipleImagesDialog
 import com.simplemobiletools.gallery.pro.dialogs.ResizeWithPathDialog
 import com.simplemobiletools.gallery.pro.helpers.DIRECTORY
+import com.simplemobiletools.gallery.pro.helpers.GalleryDbs
 import com.simplemobiletools.gallery.pro.helpers.RECYCLE_BIN
 import com.simplemobiletools.gallery.pro.models.DateTaken
 import com.squareup.picasso.Picasso
@@ -300,12 +301,59 @@ fun BaseSimpleActivity.tryCopyMoveFilesTo(fileDirItems: ArrayList<FileDirItem>, 
         return
     }
 
+    if (fileDirItems.all { GalleryDbs.isGalleryDbPath(it.path) }) {
+        exportGalleryDbFilesTo(fileDirItems, isCopyOperation, callback)
+        return
+    }
+
     val source = fileDirItems[0].getParentPath()
     PickDirectoryDialog(this, source, true, false, true, false) {
         val destination = it
         handleSAFDialog(source) {
             if (it) {
                 copyMoveFilesTo(fileDirItems, source.trimEnd('/'), destination, isCopyOperation, true, config.shouldShowHidden, callback)
+            }
+        }
+    }
+}
+
+// exporting media stored inside sqlite db files into a real folder
+private fun BaseSimpleActivity.exportGalleryDbFilesTo(fileDirItems: ArrayList<FileDirItem>, isCopyOperation: Boolean, callback: (destinationPath: String) -> Unit) {
+    val source = fileDirItems[0].getParentPath()
+    PickDirectoryDialog(this, source, true, false, true, false) { destination ->
+        handleSAFDialog(destination) {
+            if (!it) {
+                return@handleSAFDialog
+            }
+
+            handleSAFDialogSdk30(destination) {
+                if (!it) {
+                    return@handleSAFDialogSdk30
+                }
+
+                ensureBackgroundThread {
+                    fileDirItems.forEach { item ->
+                        var destinationPath = "$destination/${item.path.getFilenameFromPath()}"
+                        if (getDoesFilePathExist(destinationPath)) {
+                            destinationPath = getAlternativeFile(File(destinationPath)).path
+                        }
+
+                        if (!exportGalleryDbFile(item.path, destinationPath)) {
+                            toast(com.simplemobiletools.commons.R.string.unknown_error_occurred)
+                        }
+                    }
+
+                    if (!isCopyOperation) {
+                        deleteGalleryDbEntries(fileDirItems.map { it.path } as ArrayList<String>)
+                        fileDirItems.forEach {
+                            mediaDB.deleteMediumPath(it.path)
+                        }
+                    }
+
+                    runOnUiThread {
+                        callback(destination)
+                    }
+                }
             }
         }
     }

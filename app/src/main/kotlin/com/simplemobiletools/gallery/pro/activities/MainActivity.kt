@@ -1318,6 +1318,11 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
         val invalidDirs = ArrayList<Directory>()
         val OTGPath = config.OTGPath
         dirs.filter { !it.areFavorites() && !it.isRecycleBin() }.forEach {
+            if (GalleryDbs.isGalleryDbPath(it.path)) {
+                // folders inside sqlite dbs are validated by the media fetch, nothing to check on the real filesystem
+                return@forEach
+            }
+
             if (!getDoesFilePathExist(it.path, OTGPath)) {
                 invalidDirs.add(it)
             } else if (it.path != config.tempFolderPath && (!isRPlus() || isExternalStorageManager())) {

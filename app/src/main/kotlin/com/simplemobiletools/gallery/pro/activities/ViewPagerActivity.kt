@@ -331,7 +331,7 @@ class ViewPagerActivity : SimpleActivity(), ViewPager.OnPageChangeListener, View
             return
         }
 
-        if (!getDoesFilePathExist(mPath) && getPortraitPath() == "") {
+        if (!getDoesFilePathExist(mPath) && !GalleryDbs.isGalleryDbPath(mPath) && getPortraitPath() == "") {
             finish()
             return
         }
@@ -1099,6 +1099,11 @@ class ViewPagerActivity : SimpleActivity(), ViewPager.OnPageChangeListener, View
             return
         }
 
+        if (GalleryDbs.isGalleryDbPath(path)) {
+            handleDbDeletion()
+            return
+        }
+
         val fileDirItem = currentMedium.toFileDirItem()
         if (config.useRecycleBin && !skipRecycleBin && !getCurrentMedium()!!.getIsInRecycleBin()) {
             checkManageMediaOrHandleSAFDialogSdk30(fileDirItem.path) {
@@ -1165,6 +1170,38 @@ class ViewPagerActivity : SimpleActivity(), ViewPager.OnPageChangeListener, View
         }
     }
 
+    // media stored inside sqlite db files cannot go to the recycle bin, they are removed directly
+    private fun handleDbDeletion() {
+        val currentMedium = getCurrentMedium() ?: return
+        mIgnoredPaths.add(currentMedium.path)
+        val media = mMediaFiles.filter { !mIgnoredPaths.contains(it.path) } as ArrayList<Medium>
+        if (media.isNotEmpty()) {
+            runOnUiThread {
+                refreshUI(media, false)
+            }
+        }
+
+        if (media.size == 1) {
+            onPageSelected(0)
+        }
+
+        ensureBackgroundThread {
+            if (deleteGalleryDbEntries(arrayListOf(currentMedium.path))) {
+                mediaDB.deleteMediumPath(currentMedium.path)
+                favoritesDB.deleteFavoritePath(currentMedium.path)
+            } else {
+                toast(com.simplemobiletools.commons.R.string.unknown_error_occurred)
+            }
+
+            mIgnoredPaths.remove(currentMedium.path)
+            if (media.isEmpty()) {
+                runOnUiThread {
+                    finish()
+                }
+            }
+        }
+    }
+
     private fun isDirEmpty(media: ArrayList<Medium>): Boolean {
         return if (media.isEmpty()) {
             deleteDirectoryIfEmpty()
@@ -1183,6 +1220,26 @@ class ViewPagerActivity : SimpleActivity(), ViewPager.OnPageChangeListener, View
 
     private fun renameFile() {
         val oldPath = getCurrentPath()
+
+        if (GalleryDbs.isGalleryDbPath(oldPath)) {
+            RenameItemDialog(this, oldPath) { newPath ->
+                getCurrentMedia().getOrNull(mPos)?.apply {
+                    path = newPath
+                    name = newPath.getFilenameFromPath()
+                }
+
+                ensureBackgroundThread {
+                    val renamed = renameGalleryDbFile(oldPath, newPath.getFilenameFromPath())
+                    if (renamed != null) {
+                        updateDBMediaPath(oldPath, newPath)
+                    } else {
+                        toast(com.simplemobiletools.commons.R.string.unknown_error_occurred)
+                    }
+                }
+                updateActionbarTitle()
+            }
+            return
+        }
 
         val isSDOrOtgRootFolder = isAStorageRootFolder(oldPath.getParentPath()) && !oldPath.startsWith(internalStoragePath)
         if (isRPlus() && isSDOrOtgRootFolder && !isExternalStorageManager()) {

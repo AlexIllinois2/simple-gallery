@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/cab_remove"
+        android:title="@string/remove"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/cab_convert_to_db"
+        android:title="@string/convert_to_sqlite_db"
+        app:showAsAction="never" />
+</menu>

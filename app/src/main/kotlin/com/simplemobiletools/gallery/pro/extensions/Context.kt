@@ -38,6 +38,7 @@ import com.simplemobiletools.commons.views.MySquareImageView
 import com.simplemobiletools.gallery.pro.R
 import com.simplemobiletools.gallery.pro.asynctasks.GetMediaAsynctask
 import com.simplemobiletools.gallery.pro.databases.GalleryDatabase
+import com.simplemobiletools.gallery.pro.databases.GalleryDbStore
 import com.simplemobiletools.gallery.pro.helpers.*
 import com.simplemobiletools.gallery.pro.interfaces.*
 import com.simplemobiletools.gallery.pro.models.*
@@ -45,6 +46,7 @@ import com.simplemobiletools.gallery.pro.svg.SvgSoftwareLayerSetter
 import com.squareup.picasso.Picasso
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import kotlin.collections.set
@@ -70,6 +72,131 @@ val Context.favoritesDB: FavoritesDao get() = GalleryDatabase.getInstance(applic
 val Context.dateTakensDB: DateTakensDao get() = GalleryDatabase.getInstance(applicationContext).DateTakensDao()
 
 val Context.recycleBin: File get() = filesDir
+
+// region sqlite db (gallery db) support
+
+fun Context.getGalleryDbPathOf(virtualPath: String): String? {
+    return GalleryDbs.dbPathForKey(GalleryDbs.dbKeyOf(virtualPath), config.includedDBs)
+}
+
+fun Context.getGalleryDbPasswordOf(virtualPath: String): String {
+    val dbPath = getGalleryDbPathOf(virtualPath) ?: return ""
+    return config.getDBPassword(dbPath)
+}
+
+fun Context.readGalleryDbBytes(virtualPath: String): ByteArray? {
+    if (!GalleryDbs.isGalleryDbPath(virtualPath)) {
+        return null
+    }
+
+    val dbPath = getGalleryDbPathOf(virtualPath) ?: return null
+    return try {
+        GalleryDbStore.readBytes(applicationContext, dbPath, config.getDBPassword(dbPath), GalleryDbs.internalPathOf(virtualPath))
+    } catch (e: Exception) {
+        null
+    }
+}
+
+fun Context.doesGalleryDbPathExist(virtualPath: String): Boolean {
+    val dbPath = getGalleryDbPathOf(virtualPath) ?: return false
+    return File(dbPath).exists()
+}
+
+fun Context.getGalleryDbDirectories(): ArrayList<Directory> {
+    val directories = ArrayList<Directory>()
+    config.includedDBs.sortedBy { it.getFilenameFromPath().toLowerCase() }.forEach { dbPath ->
+        try {
+            if (!File(dbPath).exists()) {
+                return@forEach
+            }
+
+            val password = config.getDBPassword(dbPath)
+            GalleryDbStore.getFoldersWithMedia(applicationContext, dbPath, password).values.forEach { agg ->
+                val virtualPath = GalleryDbs.childVirtualPath(dbPath, agg.internalPath)
+                val cover = if (agg.coverInternalPath.isEmpty()) "" else GalleryDbs.childVirtualPath(dbPath, agg.coverInternalPath)
+                val directory = Directory(
+                    null, virtualPath, cover, agg.name, agg.mediaCnt, agg.lastModified, agg.dateTaken,
+                    agg.size, getPathLocation(virtualPath), agg.types, getGalleryDbSortValue(agg)
+                )
+                directories.add(directory)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("GalleryDb", "getGalleryDbDirectories failed for $dbPath", e)
+        }
+    }
+    return directories
+}
+
+private fun Context.getGalleryDbSortValue(agg: GalleryDbStore.FolderAgg): String {
+    return when {
+        config.directorySorting and SORT_BY_NAME != 0 -> agg.name.toLowerCase()
+        config.directorySorting and SORT_BY_SIZE != 0 -> agg.size.toString()
+        config.directorySorting and SORT_BY_DATE_MODIFIED != 0 -> agg.lastModified.toString()
+        config.directorySorting and SORT_BY_DATE_TAKEN != 0 -> agg.dateTaken.toString()
+        else -> ""
+    }
+}
+
+fun Context.getGalleryDbFoldersToScan(): ArrayList<String> {
+    val folders = ArrayList<String>()
+    getGalleryDbDirectories().forEach {
+        folders.add(it.path)
+    }
+    return folders
+}
+
+fun Context.deleteGalleryDbEntries(paths: ArrayList<String>): Boolean {
+    val byDb = HashMap<String, ArrayList<String>>()
+    paths.filter { GalleryDbs.isGalleryDbPath(it) }.forEach { path ->
+        val dbPath = getGalleryDbPathOf(path) ?: return@forEach
+        byDb.getOrPut(dbPath) { ArrayList() }.add(GalleryDbs.internalPathOf(path))
+    }
+
+    if (byDb.isEmpty()) {
+        return false
+    }
+
+    var success = true
+    byDb.forEach { (dbPath, internalPaths) ->
+        try {
+            GalleryDbStore.deleteEntries(applicationContext, dbPath, config.getDBPassword(dbPath), internalPaths)
+        } catch (e: Exception) {
+            success = false
+        }
+    }
+    return success
+}
+
+/** renames a single entry stored inside a sqlite db, returns the new internal path or null on failure */
+fun Context.renameGalleryDbFile(virtualPath: String, newName: String): String? {
+    if (!GalleryDbs.isGalleryDbPath(virtualPath)) {
+        return null
+    }
+
+    val dbPath = getGalleryDbPathOf(virtualPath) ?: return null
+    return try {
+        GalleryDbStore.renameEntry(applicationContext, dbPath, config.getDBPassword(dbPath), GalleryDbs.internalPathOf(virtualPath), newName)
+    } catch (e: Exception) {
+        null
+    }
+}
+
+/** copies the bytes of an entry stored inside a sqlite db into a real file */
+fun Context.exportGalleryDbFile(virtualPath: String, destination: String): Boolean {
+    return try {
+        val bytes = readGalleryDbBytes(virtualPath) ?: return false
+        val file = File(destination)
+        file.parentFile?.mkdirs()
+        FileOutputStream(file).use {
+            it.write(bytes)
+        }
+        true
+    } catch (e: Exception) {
+        false
+    }
+}
+
+// endregion
 
 fun Context.movePinnedDirectoriesToFront(dirs: ArrayList<Directory>): ArrayList<Directory> {
     val foundFolders = ArrayList<Directory>()
@@ -453,12 +580,20 @@ fun Context.checkAppendingHidden(path: String, hidden: String, includedFolders: 
 }
 
 fun Context.getFolderNameFromPath(path: String): String {
-    return when (path) {
-        internalStoragePath -> getString(com.simplemobiletools.commons.R.string.internal)
-        sdCardPath -> getString(com.simplemobiletools.commons.R.string.sd_card)
-        otgPath -> getString(com.simplemobiletools.commons.R.string.usb)
-        FAVORITES -> getString(com.simplemobiletools.commons.R.string.favorites)
-        RECYCLE_BIN -> getString(com.simplemobiletools.commons.R.string.recycle_bin)
+    return when {
+        GalleryDbs.isGalleryDbPath(path) -> {
+            val dbPath = getGalleryDbPathOf(path)
+            if (dbPath != null && GalleryDbs.isRootPath(path)) {
+                File(dbPath).nameWithoutExtension
+            } else {
+                path.getFilenameFromPath()
+            }
+        }
+        path == internalStoragePath -> getString(com.simplemobiletools.commons.R.string.internal)
+        path == sdCardPath -> getString(com.simplemobiletools.commons.R.string.sd_card)
+        path == otgPath -> getString(com.simplemobiletools.commons.R.string.usb)
+        path == FAVORITES -> getString(com.simplemobiletools.commons.R.string.favorites)
+        path == RECYCLE_BIN -> getString(com.simplemobiletools.commons.R.string.recycle_bin)
         else -> path.getFilenameFromPath()
     }
 }
@@ -677,6 +812,13 @@ fun Context.getCachedDirectories(
             }
         }) as ArrayList<Directory>
 
+        // append folders stored inside included sqlite db files
+        val dbDirectories = getGalleryDbDirectories()
+        dbDirectories.removeAll { dbDir -> filteredDirectories.any { it.path.equals(dbDir.path, true) } }
+        if (dbDirectories.isNotEmpty()) {
+            filteredDirectories.addAll(dbDirectories)
+        }
+
         if (shouldShowHidden) {
             val hiddenString = resources.getString(R.string.hidden)
             filteredDirectories.forEach {
@@ -765,7 +907,7 @@ fun Context.getCachedMedia(path: String, getVideosOnly: Boolean = false, getImag
             val mediaToDelete = ArrayList<Medium>()
             // creating a new thread intentionally, do not reuse the common background thread
             Thread {
-                media.filter { !getDoesFilePathExist(it.path, OTGPath) }.forEach {
+                media.filter { !GalleryDbs.isGalleryDbPath(it.path) && !getDoesFilePathExist(it.path, OTGPath) }.forEach {
                     if (it.path.startsWith(recycleBinPath)) {
                         deleteDBPath(it.path)
                     } else {
@@ -792,7 +934,13 @@ fun Context.getCachedMedia(path: String, getVideosOnly: Boolean = false, getImag
 fun Context.removeInvalidDBDirectories(dirs: ArrayList<Directory>? = null) {
     val dirsToCheck = dirs ?: directoryDB.getAll()
     val OTGPath = config.OTGPath
-    dirsToCheck.filter { !it.areFavorites() && !it.isRecycleBin() && !getDoesFilePathExist(it.path, OTGPath) && it.path != config.tempFolderPath }.forEach {
+    dirsToCheck.filter {
+        when {
+            it.areFavorites() || it.isRecycleBin() -> false
+            GalleryDbs.isGalleryDbPath(it.path) -> !doesGalleryDbPathExist(it.path)
+            else -> !getDoesFilePathExist(it.path, OTGPath) && it.path != config.tempFolderPath
+        }
+    }.forEach {
         try {
             directoryDB.deleteDirPath(it.path)
         } catch (ignored: Exception) {
@@ -984,14 +1132,14 @@ fun Context.createDirectoryFromMedia(
     var thumbnail: String? = null
 
     albumCovers.forEach {
-        if (it.path == path && getDoesFilePathExist(it.tmb, OTGPath)) {
+        if (it.path == path && (getDoesFilePathExist(it.tmb, OTGPath) || GalleryDbs.isGalleryDbPath(it.tmb))) {
             thumbnail = it.tmb
         }
     }
 
     if (thumbnail == null) {
         val sortedMedia = grouped.filter { it is Medium }.toMutableList() as ArrayList<Medium>
-        thumbnail = sortedMedia.firstOrNull { getDoesFilePathExist(it.path, OTGPath) }?.path ?: ""
+        thumbnail = sortedMedia.firstOrNull { getDoesFilePathExist(it.path, OTGPath) || GalleryDbs.isGalleryDbPath(it.path) }?.path ?: ""
     }
 
     if (config.OTGPath.isNotEmpty() && thumbnail!!.startsWith(config.OTGPath)) {

@@ -39,6 +39,8 @@ const val SHOW_ALL = "show_all"                           // display images and 
 const val HIDE_FOLDER_TOOLTIP_SHOWN = "hide_folder_tooltip_shown"
 const val EXCLUDED_FOLDERS = "excluded_folders"
 const val INCLUDED_FOLDERS = "included_folders"
+const val INCLUDED_DBS = "included_dbs"
+const val DB_PASSWORDS = "db_passwords"
 const val ALBUM_COVERS = "album_covers"
 const val HIDE_SYSTEM_UI = "hide_system_ui"
 const val DELETE_EMPTY_FOLDERS = "delete_empty_folders"
@@ -182,6 +184,11 @@ const val TYPE_RAWS = 8
 const val TYPE_SVGS = 16
 const val TYPE_PORTRAITS = 32
 
+// gallery db (sqlite) virtual file system
+const val GDB_SCHEME = "sgdb"
+const val GDB_ROOT_SEGMENT = "@root"
+const val GDB_PREFIX = "$GDB_SCHEME://"
+
 fun getDefaultFileFilter() = TYPE_IMAGES or TYPE_VIDEOS or TYPE_GIFS or TYPE_RAWS or TYPE_SVGS
 
 const val LOCATION_INTERNAL = 1
@@ -216,7 +223,7 @@ const val BOTTOM_ACTION_COPY = 4096
 const val BOTTOM_ACTION_MOVE = 8192
 const val BOTTOM_ACTION_RESIZE = 16384
 
-const val DEFAULT_BOTTOM_ACTIONS = BOTTOM_ACTION_TOGGLE_FAVORITE or BOTTOM_ACTION_EDIT or BOTTOM_ACTION_SHARE or BOTTOM_ACTION_DELETE
+const val DEFAULT_BOTTOM_ACTIONS = BOTTOM_ACTION_TOGGLE_FAVORITE or BOTTOM_ACTION_EDIT or BOTTOM_ACTION_SHARE or BOTTOM_ACTION_DELETE or BOTTOM_ACTION_PROPERTIES or BOTTOM_ACTION_MOVE
 
 // aspect ratios used at the editor for cropping
 const val ASPECT_RATIO_FREE = 0

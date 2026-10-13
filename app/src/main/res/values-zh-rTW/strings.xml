@@ -64,6 +64,17 @@
 \n
 \n此處新增的項目不會將其他資料夾排除在外。</string>
     <string name="no_media_add_included">未發現媒體檔案。您可以手動加入包含媒體檔案的資料夾來解決。</string>
+
+    <!-- Gallery sqlite dbs -->
+    <string name="manage_included_dbs">管理包含的sqlite db</string>
+    <string name="included_dbs_activity_placeholder">您可以在此處加入 sqlite db 檔案，它們會像一般資料夾一樣展示其中的媒體內容。\n\ndb 檔案可以透過「包含資料夾」頁面中的「轉換為 sqlite db」選項建立。</string>
+    <string name="convert_to_sqlite_db">轉換為 sqlite db</string>
+    <string name="convert_folder_to_db_confirmation">該資料夾及其所有子資料夾和媒體內容將被轉換為其旁邊的 sqlite db 檔案。原資料夾和內容不會被刪除。</string>
+    <string name="converting_folder">正在轉換…</string>
+    <string name="add_converted_db_to_included">是否將轉換後的 db 檔案加入包含的 sqlite db，以便在應用程式中顯示？</string>
+    <string name="invalid_db_file">這不是有效的相簿 sqlite db 檔案</string>
+    <string name="encrypt_db_with_password">使用密碼加密</string>
+
     <!-- Resizing -->
     <string name="resize_and_save">縮放所選區域並儲存</string>
     <string name="width">寬度</string>

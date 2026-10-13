@@ -14,6 +14,7 @@ import android.text.format.DateFormat
 import com.simplemobiletools.commons.extensions.*
 import com.simplemobiletools.commons.helpers.*
 import com.simplemobiletools.gallery.pro.R
+import com.simplemobiletools.gallery.pro.databases.GalleryDbStore
 import com.simplemobiletools.gallery.pro.extensions.*
 import com.simplemobiletools.gallery.pro.models.Medium
 import com.simplemobiletools.gallery.pro.models.ThumbnailItem
@@ -37,7 +38,9 @@ class MediaFetcher(val context: Context) {
         }
 
         val curMedia = ArrayList<Medium>()
-        if (context.isPathOnOTG(curPath)) {
+        if (GalleryDbs.isGalleryDbPath(curPath)) {
+            curMedia.addAll(getMediaInGalleryDb(curPath, isPickImage, isPickVideo, filterMedia, favoritePaths))
+        } else if (context.isPathOnOTG(curPath)) {
             if (context.hasOTGConnected()) {
                 val newMedia = getMediaOnOTG(curPath, isPickImage, isPickVideo, filterMedia, favoritePaths, getVideoDurations)
                 curMedia.addAll(newMedia)
@@ -98,6 +101,9 @@ class MediaFetcher(val context: Context) {
             val selectionArgs = getSelectionArgsQuery(filterMedia).toTypedArray()
             val cursor = context.contentResolver.query(uri, projection, selection, selectionArgs, null)
             folders.addAll(parseCursor(cursor!!))
+
+            // folders stored inside included sqlite db files
+            folders.addAll(context.getGalleryDbFoldersToScan())
 
             val config = context.config
             val shouldShowHidden = config.shouldShowHidden
@@ -603,6 +609,59 @@ class MediaFetcher(val context: Context) {
             val isFavorite = favoritePaths.contains(path)
             val medium = Medium(null, filename, path, folder, dateModified, dateTaken, size, type, videoDuration, isFavorite, 0L, 0L)
             media.add(medium)
+        }
+
+        return media
+    }
+
+    private fun getMediaInGalleryDb(
+        curPath: String, isPickImage: Boolean, isPickVideo: Boolean, filterMedia: Int, favoritePaths: ArrayList<String>
+    ): ArrayList<Medium> {
+        val media = ArrayList<Medium>()
+        val dbPath = context.getGalleryDbPathOf(curPath) ?: return media
+        val password = context.config.getDBPassword(dbPath)
+        val internalDir = GalleryDbs.internalPathOf(curPath)
+        val showHidden = context.config.shouldShowHidden
+
+        val entries = try {
+            GalleryDbStore.getFolderMedia(context, dbPath, password, internalDir)
+        } catch (e: Exception) {
+            android.util.Log.e("GalleryDb", "getFolderMedia failed for $curPath (db=$dbPath)", e)
+            return media
+        }
+
+        for (entry in entries) {
+            if (shouldStop) {
+                break
+            }
+
+            val type = entry.type
+            if (type == 0) {
+                continue
+            }
+
+            if (type == TYPE_IMAGES && (isPickVideo || filterMedia and TYPE_IMAGES == 0))
+                continue
+
+            if (type == TYPE_GIFS && filterMedia and TYPE_GIFS == 0)
+                continue
+
+            if (type == TYPE_RAWS && filterMedia and TYPE_RAWS == 0)
+                continue
+
+            if (type == TYPE_SVGS && filterMedia and TYPE_SVGS == 0)
+                continue
+
+            val filename = entry.name
+            if (!showHidden && filename.startsWith('.'))
+                continue
+
+            if (entry.size <= 0L)
+                continue
+
+            val path = GalleryDbs.childVirtualPath(dbPath, entry.internalPath)
+            val isFavorite = favoritePaths.contains(path)
+            media.add(Medium(null, filename, path, curPath, entry.lastModified, entry.dateTaken, entry.size, type, 0, isFavorite, 0L, 0L))
         }
 
         return media

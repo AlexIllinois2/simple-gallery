@@ -181,6 +181,13 @@
             android:parentActivityName=".activities.SettingsActivity" />
 
         <activity
+            android:name=".activities.IncludedDBsActivity"
+            android:configChanges="orientation"
+            android:exported="false"
+            android:label="@string/manage_included_dbs"
+            android:parentActivityName=".activities.SettingsActivity" />
+
+        <activity
             android:name=".activities.ExcludedFoldersActivity"
             android:configChanges="orientation"
             android:exported="false"

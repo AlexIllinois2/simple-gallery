@@ -902,6 +902,11 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             return
         }
 
+        if (filtered.all { GalleryDbs.isGalleryDbPath(it.path) }) {
+            deleteGalleryDbFiles(filtered)
+            return
+        }
+
         if (config.useRecycleBin && !skipRecycleBin && !filtered.first().path.startsWith(recycleBinPath)) {
             val movingItems = resources.getQuantityString(com.simplemobiletools.commons.R.plurals.moving_items_into_bin, filtered.size, filtered.size)
             toast(movingItems)
@@ -942,6 +947,35 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
 
             if (mMedia.isEmpty()) {
                 deleteDirectoryIfEmpty()
+                deleteDBDirectory()
+                finish()
+            }
+        }
+    }
+
+    // media stored inside sqlite db files cannot go to the recycle bin, they are removed directly
+    private fun deleteGalleryDbFiles(filtered: ArrayList<FileDirItem>) {
+        val deletingItems = resources.getQuantityString(com.simplemobiletools.commons.R.plurals.deleting_items, filtered.size, filtered.size)
+        toast(deletingItems)
+
+        ensureBackgroundThread {
+            if (!deleteGalleryDbEntries(filtered.map { it.path } as ArrayList<String>)) {
+                toast(com.simplemobiletools.commons.R.string.unknown_error_occurred)
+                return@ensureBackgroundThread
+            }
+
+            mMedia.removeAll { filtered.map { it.path }.contains((it as? Medium)?.path) }
+
+            filtered.forEach {
+                mediaDB.deleteMediumPath(it.path)
+                favoritesDB.deleteFavoritePath(it.path)
+            }
+
+            runOnUiThread {
+                setupAdapter()
+            }
+
+            if (mMedia.isEmpty()) {
                 deleteDBDirectory()
                 finish()
             }

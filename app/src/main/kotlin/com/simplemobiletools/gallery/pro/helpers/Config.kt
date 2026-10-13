@@ -91,9 +91,6 @@ class Config(context: Context) : BaseConfig(context) {
         val currPinnedFolders = HashSet<String>(pinnedFolders)
         currPinnedFolders.addAll(paths)
         pinnedFolders = currPinnedFolders.filter { it.isNotEmpty() }.toHashSet()
-        if (paths.contains(RECYCLE_BIN)) {
-            showRecycleBinLast = false
-        }
     }
 
     fun removePinnedFolders(paths: Set<String>) {
@@ -155,6 +152,50 @@ class Config(context: Context) : BaseConfig(context) {
     var includedFolders: MutableSet<String>
         get() = prefs.getStringSet(INCLUDED_FOLDERS, HashSet<String>())!!
         set(includedFolders) = prefs.edit().remove(INCLUDED_FOLDERS).putStringSet(INCLUDED_FOLDERS, includedFolders).apply()
+
+    fun addIncludedDB(path: String) {
+        val currIncludedDBs = HashSet<String>(includedDBs)
+        currIncludedDBs.add(path)
+        includedDBs = currIncludedDBs.filter { it.isNotEmpty() }.toHashSet()
+    }
+
+    fun removeIncludedDB(path: String) {
+        val currIncludedDBs = HashSet<String>(includedDBs)
+        currIncludedDBs.remove(path)
+        includedDBs = currIncludedDBs
+        setDBPassword(path, "")
+    }
+
+    var includedDBs: MutableSet<String>
+        get() = prefs.getStringSet(INCLUDED_DBS, HashSet<String>())!!
+        set(includedDBs) = prefs.edit().remove(INCLUDED_DBS).putStringSet(INCLUDED_DBS, includedDBs).apply()
+
+    // passwords for encrypted sqlite dbs, stored as a json map keyed by the db file path
+    fun getDBPassword(path: String): String {
+        // Gson.fromJson returns null for empty strings, guard against it
+        val passwords = try {
+            Gson().fromJson<HashMap<String, String>>(prefs.getString(DB_PASSWORDS, "")!!, object : TypeToken<HashMap<String, String>>() {}.type)
+        } catch (e: Exception) {
+            HashMap<String, String>()
+        } ?: HashMap()
+        return passwords[path] ?: ""
+    }
+
+    fun setDBPassword(path: String, password: String) {
+        val passwords = try {
+            Gson().fromJson<HashMap<String, String>>(prefs.getString(DB_PASSWORDS, "")!!, object : TypeToken<HashMap<String, String>>() {}.type)
+        } catch (e: Exception) {
+            HashMap<String, String>()
+        } ?: HashMap()
+
+        if (password.isEmpty()) {
+            passwords.remove(path)
+        } else {
+            passwords[path] = password
+        }
+
+        prefs.edit().putString(DB_PASSWORDS, Gson().toJson(passwords)).apply()
+    }
 
     var autoplayVideos: Boolean
         get() = prefs.getBoolean(AUTOPLAY_VIDEOS, false)
@@ -464,7 +505,7 @@ class Config(context: Context) : BaseConfig(context) {
         set(showHighestQuality) = prefs.edit().putBoolean(SHOW_HIGHEST_QUALITY, showHighestQuality).apply()
 
     var showRecycleBinLast: Boolean
-        get() = prefs.getBoolean(SHOW_RECYCLE_BIN_LAST, false)
+        get() = prefs.getBoolean(SHOW_RECYCLE_BIN_LAST, true)
         set(showRecycleBinLast) = prefs.edit().putBoolean(SHOW_RECYCLE_BIN_LAST, showRecycleBinLast).apply()
 
     var allowDownGesture: Boolean

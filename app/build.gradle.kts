@@ -128,6 +128,8 @@ dependencies {
 
     implementation(libs.bundles.room)
     ksp(libs.androidx.room.compiler)
+
+    implementation("net.zetetic:android-database-sqlcipher:4.5.4")
 }
 
 // Apply the PESDKPlugin

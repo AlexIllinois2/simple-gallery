@@ -64,6 +64,16 @@
     <string name="included_activity_placeholder">If you have some folders which contain media, but were not recognized by the app, you can add them manually here.\n\nAdding some items here will not exclude any other folder.</string>
     <string name="no_media_add_included">No media files have been found. You can solve it by adding the folders containing media files manually.</string>
 
+    <!-- Gallery sqlite dbs -->
+    <string name="manage_included_dbs">Manage included sqlite dbs</string>
+    <string name="included_dbs_activity_placeholder">You can add sqlite db files here and they will act like regular folders containing your media.\n\nThe db files can be created via the \"Convert to sqlite db\" option at the included folders.</string>
+    <string name="convert_to_sqlite_db">Convert to sqlite db</string>
+    <string name="convert_folder_to_db_confirmation">The folder with all of its subfolders and media will be converted into a sqlite db file placed next to it. The original folder and its content will not be deleted.</string>
+    <string name="converting_folder">Converting…</string>
+    <string name="add_converted_db_to_included">Do you want to add the converted db file to the included sqlite dbs, so it shows up in the app?</string>
+    <string name="invalid_db_file">This is not a valid gallery sqlite db file</string>
+    <string name="encrypt_db_with_password">Encrypt with password</string>
+
     <!-- Resizing -->
     <string name="resize_and_save">Resize selection and save</string>
     <string name="width">Width</string>
