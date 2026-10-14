@@ -189,6 +189,10 @@ const val GDB_SCHEME = "sgdb"
 const val GDB_ROOT_SEGMENT = "@root"
 const val GDB_PREFIX = "$GDB_SCHEME://"
 
+// entries extracted out of a db into a real file, needed by everything that only speaks file paths (Glide videos, ExoPlayer)
+const val GDB_MEDIA_CACHE = "db_media"
+const val GDB_MEDIA_CACHE_LIMIT = 512L * 1024 * 1024
+
 fun getDefaultFileFilter() = TYPE_IMAGES or TYPE_VIDEOS or TYPE_GIFS or TYPE_RAWS or TYPE_SVGS
 
 const val LOCATION_INTERNAL = 1

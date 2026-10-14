@@ -54,4 +54,10 @@ object GalleryDbs {
     }
 
     fun isRootPath(virtualPath: String): Boolean = internalPathOf(virtualPath).isEmpty()
+
+    /** virtual path rendered as an ordinary hierarchy, the db file itself taking the place of the root folder */
+    fun displayPath(virtualPath: String, dbPath: String): String {
+        val internalPath = internalPathOf(virtualPath)
+        return if (internalPath.isEmpty()) dbPath else "$dbPath/$internalPath"
+    }
 }

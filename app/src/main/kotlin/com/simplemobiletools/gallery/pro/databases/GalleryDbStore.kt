@@ -9,11 +9,14 @@ import com.simplemobiletools.commons.extensions.isGif
 import com.simplemobiletools.commons.extensions.isImageFast
 import com.simplemobiletools.commons.extensions.isRawFast
 import com.simplemobiletools.commons.extensions.isSvg
+import com.simplemobiletools.commons.extensions.isVideoFast
 import com.simplemobiletools.gallery.pro.helpers.TYPE_GIFS
 import com.simplemobiletools.gallery.pro.helpers.TYPE_IMAGES
 import com.simplemobiletools.gallery.pro.helpers.TYPE_RAWS
 import com.simplemobiletools.gallery.pro.helpers.TYPE_SVGS
+import com.simplemobiletools.gallery.pro.helpers.TYPE_VIDEOS
 import java.io.File
+import java.io.FileOutputStream
 
 /**
  * Access layer for sqlite db files acting as gallery folders.
@@ -34,6 +37,7 @@ import java.io.File
 object GalleryDbStore {
 
     private const val TAG = "GalleryDb"
+    private const val BLOB_CHUNK_SIZE = 512 * 1024
 
     data class DbEntry(
         val internalPath: String,
@@ -67,6 +71,7 @@ object GalleryDbStore {
         name.isGif() -> TYPE_GIFS
         name.isRawFast() -> TYPE_RAWS
         name.isSvg() -> TYPE_SVGS
+        name.isVideoFast() -> TYPE_VIDEOS
         name.isImageFast() -> TYPE_IMAGES
         else -> 0
     }
@@ -232,45 +237,97 @@ object GalleryDbStore {
         return media
     }
 
-    fun readBytes(context: Context, dbPath: String, password: String, internalPath: String): ByteArray? {
-        var bytes: ByteArray? = null
-        val handle = open(context, dbPath, password)
-        handle.query("SELECT length(data) FROM entries WHERE path = ? AND is_dir = 0", arrayOf(internalPath)) { cursor ->
+    fun getEntry(context: Context, dbPath: String, password: String, internalPath: String): DbEntry? {
+        var entry: DbEntry? = null
+        open(context, dbPath, password).query("SELECT $FILE_COLUMNS FROM entries WHERE path = ?", arrayOf(internalPath)) { cursor ->
             if (cursor.moveToFirst()) {
-                val total = cursor.getLong(0)
-                bytes = if (total <= 0L) ByteArray(0) else readBlobInChunks(handle, internalPath, total)
+                entry = readEntry(cursor)
             }
         }
-        return bytes
+        return entry
+    }
+
+    /** media count and total size of the given internal folder, itself and every nesting level below included */
+    fun getSubtreeStats(context: Context, dbPath: String, password: String, internalPath: String): Pair<Int, Long> {
+        val prefix = if (internalPath.isEmpty()) "%" else "${escapeLike(internalPath)}/%"
+        var count = 0
+        var size = 0L
+        open(context, dbPath, password).query(
+            "SELECT COUNT(*), SUM(size) FROM entries WHERE is_dir = 0 AND (parent = ? OR path LIKE ? ESCAPE '\\')",
+            arrayOf(internalPath, prefix)
+        ) { cursor ->
+            if (cursor.moveToFirst()) {
+                count = cursor.getLong(0).toInt()
+                size = cursor.getLong(1)
+            }
+        }
+        return count to size
+    }
+
+    // "_" and "%" are single and multi character wildcards inside LIKE patterns, file names are literals
+    private fun escapeLike(value: String) = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    fun readBytes(context: Context, dbPath: String, password: String, internalPath: String): ByteArray? {
+        val handle = open(context, dbPath, password)
+        val total = readBlobLength(handle, internalPath) ?: return null
+        return if (total <= 0L) ByteArray(0) else readBlobInChunks(handle, internalPath, total)
+    }
+
+    /** streams the blob into a file, videos are far too big to ever hold in memory */
+    fun writeToFile(context: Context, dbPath: String, password: String, internalPath: String, destination: File): Boolean {
+        val handle = open(context, dbPath, password)
+        val total = readBlobLength(handle, internalPath) ?: return false
+        return try {
+            destination.parentFile?.mkdirs()
+            FileOutputStream(destination).use { out ->
+                var position = 1L
+                while (position <= total) {
+                    val chunk = readBlobChunk(handle, internalPath, position) ?: return false
+                    out.write(chunk)
+                    position += chunk.size
+                }
+            }
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun readBlobLength(handle: DbHandle, internalPath: String): Long? {
+        var length: Long? = null
+        handle.query("SELECT length(data) FROM entries WHERE path = ? AND is_dir = 0", arrayOf(internalPath)) { cursor ->
+            if (cursor.moveToFirst()) {
+                length = cursor.getLong(0)
+            }
+        }
+        return length
     }
 
     /** large blobs exceed the cursor window size, they have to be fetched in substr() chunks */
     private fun readBlobInChunks(handle: DbHandle, internalPath: String, total: Long): ByteArray {
-        val chunkSize = 512 * 1024
         val result = ByteArray(total.toInt())
         var filled = 0
-        var position = 1L   // substr() positions are 1-based
         while (filled < total) {
-            val len = minOf(chunkSize.toLong(), total - (position - 1)).toInt()
-            val before = filled
-            handle.query(
-                "SELECT substr(data, ?, ?) FROM entries WHERE path = ? AND is_dir = 0",
-                arrayOf(position.toString(), len.toString(), internalPath)
-            ) { cursor ->
-                if (cursor.moveToFirst()) {
-                    val chunk = cursor.getBlob(0)
-                    if (chunk != null) {
-                        System.arraycopy(chunk, 0, result, filled, chunk.size)
-                        filled += chunk.size
-                    }
-                }
-            }
-            if (filled == before) {
-                throw IllegalStateException("failed to read blob chunk at $position for $internalPath")
-            }
-            position += len
+            val chunk = readBlobChunk(handle, internalPath, filled + 1L)
+                ?: throw IllegalStateException("failed to read blob chunk at ${filled + 1} for $internalPath")
+
+            System.arraycopy(chunk, 0, result, filled, chunk.size)
+            filled += chunk.size
         }
         return result
+    }
+
+    private fun readBlobChunk(handle: DbHandle, internalPath: String, position: Long): ByteArray? {
+        var chunk: ByteArray? = null
+        handle.query(
+            "SELECT substr(data, ?, ?) FROM entries WHERE path = ? AND is_dir = 0",
+            arrayOf(position.toString(), BLOB_CHUNK_SIZE.toString(), internalPath)
+        ) { cursor ->
+            if (cursor.moveToFirst()) {
+                chunk = cursor.getBlob(0)
+            }
+        }
+        return chunk?.takeIf { it.isNotEmpty() }
     }
 
     fun readBitmap(context: Context, dbPath: String, password: String, internalPath: String): Bitmap? {

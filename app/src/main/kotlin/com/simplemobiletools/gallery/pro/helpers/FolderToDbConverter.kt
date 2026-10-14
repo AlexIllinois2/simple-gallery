@@ -7,7 +7,7 @@ import java.io.File
 /**
  * converts a real folder (with any nesting) into a sqlite db file placed next to the source folder.
  * the original folder and its content are kept untouched.
- * only folders (the whole structure) and media files are written into the db.
+ * every folder and every file is written into the db as is, the entry list mirrors the source one to the letter.
  */
 object FolderToDbConverter {
 
@@ -71,7 +71,7 @@ object FolderToDbConverter {
                 val internalPath = if (internalParent.isEmpty()) item.name else "$internalParent/${item.name}"
                 folders.add(internalPath to item.name)
                 collectRecursively(item, internalPath, folders, files)
-            } else if (item.isFile && GalleryDbStore.typeForName(item.name) != 0) {
+            } else if (item.isFile) {
                 files.add(item)
             }
         }

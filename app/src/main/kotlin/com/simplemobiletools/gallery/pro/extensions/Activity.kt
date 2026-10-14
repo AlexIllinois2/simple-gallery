@@ -28,6 +28,7 @@ import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.request.RequestOptions
 import com.simplemobiletools.commons.activities.BaseSimpleActivity
 import com.simplemobiletools.commons.dialogs.ConfirmationDialog
+import com.simplemobiletools.commons.dialogs.PropertiesDialog
 import com.simplemobiletools.commons.dialogs.SecurityDialog
 import com.simplemobiletools.commons.extensions.*
 import com.simplemobiletools.commons.helpers.*
@@ -39,6 +40,7 @@ import com.simplemobiletools.gallery.pro.activities.MediaActivity
 import com.simplemobiletools.gallery.pro.activities.SettingsActivity
 import com.simplemobiletools.gallery.pro.activities.SimpleActivity
 import com.simplemobiletools.gallery.pro.dialogs.AllFilesPermissionDialog
+import com.simplemobiletools.gallery.pro.dialogs.GalleryDbPropertiesDialog
 import com.simplemobiletools.gallery.pro.dialogs.PickDirectoryDialog
 import com.simplemobiletools.gallery.pro.dialogs.ResizeMultipleImagesDialog
 import com.simplemobiletools.gallery.pro.dialogs.ResizeWithPathDialog
@@ -295,66 +297,117 @@ fun BaseSimpleActivity.toggleFileVisibility(oldPath: String, hide: Boolean, call
     }
 }
 
+/** show the commons dialog for real files, entries of sqlite db albums have no resolvable File behind them */
+fun Activity.showFileProperties(path: String) {
+    if (GalleryDbs.isGalleryDbPath(path)) {
+        GalleryDbPropertiesDialog(this, arrayListOf(path))
+    } else {
+        PropertiesDialog(this, path, config.shouldShowHidden)
+    }
+}
+
+fun Activity.showFileProperties(paths: List<String>) {
+    if (paths.isNotEmpty() && paths.all { GalleryDbs.isGalleryDbPath(it) }) {
+        GalleryDbPropertiesDialog(this, paths)
+    } else {
+        PropertiesDialog(this, paths, config.shouldShowHidden)
+    }
+}
+
 fun BaseSimpleActivity.tryCopyMoveFilesTo(fileDirItems: ArrayList<FileDirItem>, isCopyOperation: Boolean, callback: (destinationPath: String) -> Unit) {
     if (fileDirItems.isEmpty()) {
         toast(com.simplemobiletools.commons.R.string.unknown_error_occurred)
         return
     }
 
-    if (fileDirItems.all { GalleryDbs.isGalleryDbPath(it.path) }) {
-        exportGalleryDbFilesTo(fileDirItems, isCopyOperation, callback)
-        return
-    }
-
     val source = fileDirItems[0].getParentPath()
-    PickDirectoryDialog(this, source, true, false, true, false) {
-        val destination = it
-        handleSAFDialog(source) {
-            if (it) {
-                copyMoveFilesTo(fileDirItems, source.trimEnd('/'), destination, isCopyOperation, true, config.shouldShowHidden, callback)
+    PickDirectoryDialog(this, source, true, false, true, false) { destination ->
+        val isGalleryDbInvolved = GalleryDbs.isGalleryDbPath(destination) || fileDirItems.any { GalleryDbs.isGalleryDbPath(it.path) }
+        if (isGalleryDbInvolved) {
+            copyMoveGalleryDbItems(fileDirItems, destination, isCopyOperation, callback)
+        } else {
+            handleSAFDialog(source) {
+                if (it) {
+                    copyMoveFilesTo(fileDirItems, source.trimEnd('/'), destination, isCopyOperation, true, config.shouldShowHidden, callback)
+                }
             }
         }
     }
 }
 
-// exporting media stored inside sqlite db files into a real folder
-private fun BaseSimpleActivity.exportGalleryDbFilesTo(fileDirItems: ArrayList<FileDirItem>, isCopyOperation: Boolean, callback: (destinationPath: String) -> Unit) {
-    val source = fileDirItems[0].getParentPath()
-    PickDirectoryDialog(this, source, true, false, true, false) { destination ->
-        handleSAFDialog(destination) {
-            if (!it) {
-                return@handleSAFDialog
-            }
+/** copy/move between real folders and sqlite db albums, at one side of the transfer there always is a db */
+private fun BaseSimpleActivity.copyMoveGalleryDbItems(
+    fileDirItems: ArrayList<FileDirItem>, destination: String, isCopyOperation: Boolean, callback: (destinationPath: String) -> Unit
+) {
+    if (GalleryDbs.isGalleryDbPath(destination)) {
+        transferGalleryDbItems(fileDirItems, destination, isCopyOperation, callback)
+        return
+    }
 
-            handleSAFDialogSdk30(destination) {
-                if (!it) {
-                    return@handleSAFDialogSdk30
+    handleSAFDialog(destination) {
+        if (!it) {
+            return@handleSAFDialog
+        }
+
+        handleSAFDialogSdk30(destination) {
+            if (it) {
+                transferGalleryDbItems(fileDirItems, destination, isCopyOperation, callback)
+            }
+        }
+    }
+}
+
+private fun BaseSimpleActivity.transferGalleryDbItems(
+    fileDirItems: ArrayList<FileDirItem>, destination: String, isCopyOperation: Boolean, callback: (destinationPath: String) -> Unit
+) {
+    ensureBackgroundThread {
+        val transferredPaths = ArrayList<String>()
+        fileDirItems.forEach { item ->
+            val sourcePath = item.path
+            val copied = if (GalleryDbs.isGalleryDbPath(destination)) {
+                copyItemIntoGalleryDb(sourcePath, destination)
+            } else {
+                var destinationPath = "$destination/${sourcePath.getFilenameFromPath()}"
+                if (getDoesFilePathExist(destinationPath)) {
+                    destinationPath = getAlternativeFile(File(destinationPath)).path
                 }
 
-                ensureBackgroundThread {
-                    fileDirItems.forEach { item ->
-                        var destinationPath = "$destination/${item.path.getFilenameFromPath()}"
-                        if (getDoesFilePathExist(destinationPath)) {
-                            destinationPath = getAlternativeFile(File(destinationPath)).path
-                        }
+                copyItemToRealFile(sourcePath, destinationPath)
+            }
 
-                        if (!exportGalleryDbFile(item.path, destinationPath)) {
-                            toast(com.simplemobiletools.commons.R.string.unknown_error_occurred)
-                        }
-                    }
-
-                    if (!isCopyOperation) {
-                        deleteGalleryDbEntries(fileDirItems.map { it.path } as ArrayList<String>)
-                        fileDirItems.forEach {
-                            mediaDB.deleteMediumPath(it.path)
-                        }
-                    }
-
-                    runOnUiThread {
-                        callback(destination)
-                    }
+            if (copied) {
+                transferredPaths.add(sourcePath)
+            } else {
+                runOnUiThread {
+                    toast(com.simplemobiletools.commons.R.string.unknown_error_occurred)
                 }
             }
+        }
+
+        // a source is removed only after its content reached the destination
+        if (!isCopyOperation) {
+            deleteTransferredSources(transferredPaths)
+        }
+
+        runOnUiThread {
+            callback(destination)
+        }
+    }
+}
+
+private fun BaseSimpleActivity.deleteTransferredSources(paths: List<String>) {
+    val dbPaths = paths.filter { GalleryDbs.isGalleryDbPath(it) }
+    if (dbPaths.isNotEmpty()) {
+        deleteGalleryDbEntries(dbPaths as ArrayList<String>)
+        dbPaths.forEach {
+            mediaDB.deleteMediumPath(it)
+        }
+    }
+
+    paths.filter { !GalleryDbs.isGalleryDbPath(it) }.forEach {
+        val fileDirItem = FileDirItem(it, it.getFilenameFromPath())
+        runOnUiThread {
+            tryDeleteFileDirItem(fileDirItem, false, true)
         }
     }
 }

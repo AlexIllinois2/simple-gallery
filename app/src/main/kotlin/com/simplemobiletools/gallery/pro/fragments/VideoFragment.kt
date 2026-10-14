@@ -32,6 +32,7 @@ import com.simplemobiletools.gallery.pro.activities.PanoramaVideoActivity
 import com.simplemobiletools.gallery.pro.activities.VideoActivity
 import com.simplemobiletools.gallery.pro.databinding.PagerVideoItemBinding
 import com.simplemobiletools.gallery.pro.extensions.config
+import com.simplemobiletools.gallery.pro.extensions.getGalleryDbMediaFile
 import com.simplemobiletools.gallery.pro.extensions.hasNavBar
 import com.simplemobiletools.gallery.pro.extensions.parseFileChannel
 import com.simplemobiletools.gallery.pro.helpers.*
@@ -59,6 +60,9 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener, S
     private var mPositionWhenInit = 0
     private var mPositionAtPause = 0L
     var mIsPlaying = false
+
+    // real file of a video stored inside a sqlite db, null until it gets extracted
+    private var mVideoPath: String? = null
 
     private var mExoPlayer: ExoPlayer? = null
     private var mVideoSize = Point(1, 1)
@@ -167,7 +171,43 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener, S
         }
 
         storeStateVariables()
-        Glide.with(context).load(mMedium.path).into(binding.videoPreview)
+        if (GalleryDbs.isGalleryDbPath(mMedium.path)) {
+            extractDbVideoAndSetup(container, savedInstanceState)
+        } else {
+            setupVideoContent(container, savedInstanceState)
+        }
+        return mView
+    }
+
+    /** Glide, MediaMetadataRetriever and ExoPlayer all need a real file, so a db stored video has to be extracted first */
+    private fun extractDbVideoAndSetup(container: ViewGroup?, savedInstanceState: Bundle?) {
+        ensureBackgroundThread {
+            val mediaFile = try {
+                requireContext().getGalleryDbMediaFile(mMedium.path)
+            } catch (e: Exception) {
+                null
+            }
+
+            activity?.runOnUiThread {
+                if (this.activity == null || view == null) {
+                    return@runOnUiThread
+                }
+
+                if (mediaFile == null) {
+                    activity?.toast(com.simplemobiletools.commons.R.string.unknown_error_occurred)
+                    return@runOnUiThread
+                }
+
+                mVideoPath = mediaFile.absolutePath
+                setupVideoContent(container, savedInstanceState)
+            }
+        }
+    }
+
+    private fun setupVideoContent(container: ViewGroup?, savedInstanceState: Bundle?) {
+        val context = requireContext()
+        val activity = requireActivity()
+        Glide.with(context).load(getVideoPath()).into(binding.videoPreview)
 
         // setMenuVisibility is not called at VideoActivity (third party intent)
         if (!mIsFragmentVisible && activity is VideoActivity) {
@@ -179,7 +219,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener, S
         checkIfPanorama()
 
         ensureBackgroundThread {
-            activity.getVideoResolution(mMedium.path)?.apply {
+            activity.getVideoResolution(getVideoPath())?.apply {
                 mVideoSize.x = x
                 mVideoSize.y = y
             }
@@ -191,7 +231,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener, S
                 videoPlayOutline.beGone()
                 mVolumeSideScroll.beGone()
                 mBrightnessSideScroll.beGone()
-                Glide.with(context).load(mMedium.path).into(videoPreview)
+                Glide.with(context).load(getVideoPath()).into(videoPreview)
             }
         }
 
@@ -236,9 +276,9 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener, S
         if (mStoredRememberLastVideoPosition) {
             restoreLastVideoSavedPosition()
         }
-
-        return mView
     }
+
+    private fun getVideoPath() = mVideoPath ?: mMedium.path
 
     override fun onResume() {
         super.onResume()
@@ -352,8 +392,9 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener, S
             return
         }
 
-        val isContentUri = mMedium.path.startsWith("content://")
-        val uri = if (isContentUri) Uri.parse(mMedium.path) else Uri.fromFile(File(mMedium.path))
+        val videoPath = getVideoPath()
+        val isContentUri = videoPath.startsWith("content://")
+        val uri = if (isContentUri) Uri.parse(videoPath) else Uri.fromFile(File(videoPath))
         val dataSpec = DataSpec(uri)
         val fileDataSource = if (isContentUri) {
             ContentDataSource(requireContext())
@@ -432,7 +473,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener, S
     }
 
     private fun launchVideoPlayer() {
-        listener?.launchViewVideoIntent(mMedium.path)
+        listener?.launchViewVideoIntent(getVideoPath())
     }
 
     private fun toggleFullscreen() {
@@ -489,10 +530,11 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener, S
     }
 
     private fun checkIfPanorama() {
+        val videoPath = getVideoPath()
         try {
-            val fis = FileInputStream(File(mMedium.path))
+            val fis = FileInputStream(File(videoPath))
             fis.use {
-                requireContext().parseFileChannel(mMedium.path, it.channel, 0, 0, 0) {
+                requireContext().parseFileChannel(videoPath, it.channel, 0, 0, 0) {
                     mIsPanorama = true
                 }
             }
@@ -503,7 +545,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener, S
 
     private fun openPanorama() {
         Intent(context, PanoramaVideoActivity::class.java).apply {
-            putExtra(PATH, mMedium.path)
+            putExtra(PATH, getVideoPath())
             startActivity(this)
         }
     }
@@ -703,7 +745,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener, S
 
     private fun setupVideoDuration() {
         ensureBackgroundThread {
-            mDuration = context?.getDuration(mMedium.path) ?: 0
+            mDuration = context?.getDuration(getVideoPath()) ?: 0
 
             activity?.runOnUiThread {
                 setupTimeHolder()

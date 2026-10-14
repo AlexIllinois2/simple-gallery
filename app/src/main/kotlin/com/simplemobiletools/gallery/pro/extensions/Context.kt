@@ -102,6 +102,137 @@ fun Context.doesGalleryDbPathExist(virtualPath: String): Boolean {
     return File(dbPath).exists()
 }
 
+fun Context.getGalleryDbEntry(virtualPath: String): GalleryDbStore.DbEntry? {
+    if (!GalleryDbs.isGalleryDbPath(virtualPath)) {
+        return null
+    }
+
+    val dbPath = getGalleryDbPathOf(virtualPath) ?: return null
+    return try {
+        GalleryDbStore.getEntry(applicationContext, dbPath, config.getDBPassword(dbPath), GalleryDbs.internalPathOf(virtualPath))
+    } catch (e: Exception) {
+        null
+    }
+}
+
+fun Context.getGalleryDbSubtreeStats(virtualPath: String): Pair<Int, Long> {
+    val dbPath = getGalleryDbPathOf(virtualPath) ?: return 0 to 0L
+    return try {
+        GalleryDbStore.getSubtreeStats(applicationContext, dbPath, config.getDBPassword(dbPath), GalleryDbs.internalPathOf(virtualPath))
+    } catch (e: Exception) {
+        0 to 0L
+    }
+}
+
+/** copies a real file, or an entry of another db, into the folder represented by the given virtual db path */
+fun Context.copyItemIntoGalleryDb(sourcePath: String, destinationVirtualPath: String): Boolean {
+    val dbPath = getGalleryDbPathOf(destinationVirtualPath) ?: return false
+    val password = config.getDBPassword(dbPath)
+    val internalDir = GalleryDbs.internalPathOf(destinationVirtualPath)
+    val name = sourcePath.getFilenameFromPath()
+
+    return try {
+        val bytes = if (GalleryDbs.isGalleryDbPath(sourcePath)) {
+            readGalleryDbBytes(sourcePath) ?: return false
+        } else {
+            File(sourcePath).readBytes()
+        }
+
+        val sourceEntry = getGalleryDbEntry(sourcePath)
+        val sourceFile = File(sourcePath)
+        val lastModified = sourceEntry?.lastModified?.takeIf { it != 0L } ?: sourceFile.lastModified()
+        val dateTaken = sourceEntry?.dateTaken?.takeIf { it != 0L } ?: lastModified
+
+        val internalPath = getAlternativeGalleryDbPath(dbPath, password, internalDir, name)
+        GalleryDbStore.runInTransaction(applicationContext, dbPath, password) {
+            if (internalDir.isNotEmpty() && GalleryDbStore.getEntry(applicationContext, dbPath, password, internalDir) == null) {
+                GalleryDbStore.insertFolder(applicationContext, dbPath, password, internalDir, internalDir.substringAfterLast('/'))
+            }
+            GalleryDbStore.insertFile(applicationContext, dbPath, password, internalPath, name, bytes, lastModified, dateTaken)
+        }
+        true
+    } catch (e: Exception) {
+        false
+    }
+}
+
+private fun Context.getAlternativeGalleryDbPath(dbPath: String, password: String, internalDir: String, name: String): String {
+    val base = name.substringBeforeLast('.', name)
+    val extension = if (name.contains('.')) ".${name.substringAfterLast('.')}" else ""
+    var internalPath = if (internalDir.isEmpty()) name else "$internalDir/$name"
+    var index = 1
+    while (GalleryDbStore.getEntry(applicationContext, dbPath, password, internalPath) != null) {
+        internalPath = if (internalDir.isEmpty()) "$base ($index)$extension" else "$internalDir/$base ($index)$extension"
+        index++
+    }
+    return internalPath
+}
+
+/**
+ * Glide, MediaMetadataRetriever and ExoPlayer all need a real file, so an entry that cannot be decoded from a stream
+ * (videos) is extracted into the cache dir first. The least recently used extractions are dropped to stay under the limit.
+ */
+fun Context.getGalleryDbMediaFile(virtualPath: String): File? {
+    val dbPath = getGalleryDbPathOf(virtualPath) ?: return null
+    val internalPath = GalleryDbs.internalPathOf(virtualPath)
+    if (internalPath.split('/').any { it.isEmpty() || it == ".." }) {
+        return null
+    }
+
+    val entry = getGalleryDbEntry(virtualPath) ?: return null
+    if (entry.isDir || entry.size > GDB_MEDIA_CACHE_LIMIT) {
+        return null
+    }
+
+    val mediaFile = File(File(File(cacheDir, GDB_MEDIA_CACHE), GalleryDbs.dbKeyOf(virtualPath)), internalPath)
+    if (isExtracted(mediaFile, entry.size)) {
+        mediaFile.setLastModified(System.currentTimeMillis())
+        return mediaFile
+    }
+
+    synchronized(galleryDbMediaCacheLock) {
+        if (isExtracted(mediaFile, entry.size)) {
+            return mediaFile
+        }
+
+        val password = config.getDBPassword(dbPath)
+        val written = try {
+            GalleryDbStore.writeToFile(applicationContext, dbPath, password, internalPath, mediaFile)
+        } catch (e: Exception) {
+            false
+        }
+
+        if (!written) {
+            mediaFile.delete()
+            return null
+        }
+
+        trimGalleryDbMediaCache()
+        return mediaFile
+    }
+}
+
+private fun isExtracted(mediaFile: File, size: Long) = mediaFile.exists() && mediaFile.length() == size
+
+private fun Context.trimGalleryDbMediaCache() {
+    val extracted = ArrayList<File>()
+    File(cacheDir, GDB_MEDIA_CACHE).walkTopDown().filter { it.isFile }.forEach {
+        extracted.add(it)
+    }
+
+    var total = extracted.sumOf { it.length() }
+    extracted.sortedBy { it.lastModified() }.forEach {
+        if (total <= GDB_MEDIA_CACHE_LIMIT) {
+            return@forEach
+        }
+
+        total -= it.length()
+        it.delete()
+    }
+}
+
+private val galleryDbMediaCacheLock = Any()
+
 fun Context.getGalleryDbDirectories(): ArrayList<Directory> {
     val directories = ArrayList<Directory>()
     config.includedDBs.sortedBy { it.getFilenameFromPath().toLowerCase() }.forEach { dbPath ->
@@ -181,10 +312,15 @@ fun Context.renameGalleryDbFile(virtualPath: String, newName: String): String? {
     }
 }
 
-/** copies the bytes of an entry stored inside a sqlite db into a real file */
-fun Context.exportGalleryDbFile(virtualPath: String, destination: String): Boolean {
+/** copies the content of a real file or of an entry stored inside a sqlite db into a real destination file */
+fun Context.copyItemToRealFile(sourcePath: String, destination: String): Boolean {
     return try {
-        val bytes = readGalleryDbBytes(virtualPath) ?: return false
+        val bytes = if (GalleryDbs.isGalleryDbPath(sourcePath)) {
+            readGalleryDbBytes(sourcePath) ?: return false
+        } else {
+            File(sourcePath).readBytes()
+        }
+
         val file = File(destination)
         file.parentFile?.mkdirs()
         FileOutputStream(file).use {

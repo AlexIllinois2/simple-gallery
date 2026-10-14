@@ -851,7 +851,12 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
                 if (shouldSkipAuthentication()) {
                     extras[SKIP_AUTHENTICATION] = true
                 }
-                openPath(path, false, extras)
+
+                if (GalleryDbs.isGalleryDbPath(path)) {
+                    openExtractedDbVideo(path, extras)
+                } else {
+                    openPath(path, false, extras)
+                }
             } else {
                 Intent(this, ViewPagerActivity::class.java).apply {
                     putExtra(SKIP_AUTHENTICATION, shouldSkipAuthentication())
@@ -861,6 +866,20 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
                     putExtra(SHOW_RECYCLE_BIN, mPath == RECYCLE_BIN)
                     putExtra(IS_FROM_GALLERY, true)
                     startActivity(this)
+                }
+            }
+        }
+    }
+
+    /** an external player cannot read a db entry, so it has to become a real file first */
+    private fun openExtractedDbVideo(path: String, extras: HashMap<String, Boolean>) {
+        ensureBackgroundThread {
+            val mediaFile = getGalleryDbMediaFile(path)
+            runOnUiThread {
+                if (mediaFile == null) {
+                    toast(com.simplemobiletools.commons.R.string.unknown_error_occurred)
+                } else {
+                    openPath(mediaFile.absolutePath, false, extras)
                 }
             }
         }

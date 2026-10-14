@@ -225,14 +225,14 @@ class DirectoryAdapter(
             if (path != FAVORITES && path != RECYCLE_BIN) {
                 activity.handleLockedFolderOpening(path) { success ->
                     if (success) {
-                        PropertiesDialog(activity, path, config.shouldShowHidden)
+                        activity.showFileProperties(path)
                     }
                 }
             }
         } else {
-            PropertiesDialog(activity, getSelectedPaths().filter {
+            activity.showFileProperties(getSelectedPaths().filter {
                 it != FAVORITES && it != RECYCLE_BIN && !config.isFolderProtected(it)
-            }.toMutableList(), config.shouldShowHidden)
+            }.toMutableList())
         }
     }
 

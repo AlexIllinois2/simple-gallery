@@ -643,6 +643,9 @@ class MediaFetcher(val context: Context) {
             if (type == TYPE_IMAGES && (isPickVideo || filterMedia and TYPE_IMAGES == 0))
                 continue
 
+            if (type == TYPE_VIDEOS && (isPickImage || filterMedia and TYPE_VIDEOS == 0))
+                continue
+
             if (type == TYPE_GIFS && filterMedia and TYPE_GIFS == 0)
                 continue
 
