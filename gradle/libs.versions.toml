@@ -2,26 +2,40 @@
 #imgly
 imgly = "10.7.3"
 #jetbrains
-kotlin = "1.8.22"
+kotlin = "1.9.10"
 #KSP
-ksp = "1.8.22-1.0.11"
+ksp = "1.9.10-1.0.13"
 #AndroidX
 androidx-swiperefreshlayout = "1.1.0"
 androidx-constraintlayout = "2.1.4"
+androidx-appcompat = "1.6.1"
+androidx-coreKtx = "1.12.0"
+androidx-documentfile = "1.0.1"
+androidx-exifinterface = "1.3.6"
+androidx-biometricKtx = "1.2.0-alpha05"
+androidx-customView = "1.2.0-alpha02"
+androidx-customViewPooling = "1.0.0"
+androidx-lifecycle = "2.7.0-alpha02"
 #exif
 exif = "1.0.1"
 #Room
-room = "2.6.0-beta01"
-#Simple tools
-simple-commons = "ea86877113"
+room = "2.6.0-rc01"
+#Compose
+compose = "1.6.0-alpha07"
+composeMaterial3 = "1.2.0-alpha09"
+composeCompiler = "1.5.3"
+composeActivity = "1.8.0"
+glideCompose = "1.0.0-beta01"
+#Material
+material = "1.10.0"
 #Gradle
-gradlePlugins-agp = "7.4.0"
+gradlePlugins-agp = "8.1.2"
 #Other
 androidGifDrawable = "1.2.25"
 androidImageCropper = "4.5.0"
 apng = "2.28.0"
 awebp = "2.28.0"
-glideCompiler = "4.16.0"
+glide = "4.16.0"
 zjupureWebpdecoder = "2.6.4.16.0"
 gestureviews = "a8e8fa8d27"
 androidsvgAar = "1.4"
@@ -33,6 +47,15 @@ media3Exoplayer = "1.1.0"
 okhttp = "4.9.0"
 okio = "3.0.0"
 picasso = "2.71828"
+gson = "2.10.1"
+jodaTime = "2.12.5"
+ezVcard = "0.11.3"
+patternLockView = "a90b0d4bf0"
+reprint = "2cb206415d"
+recyclerviewFastscroller = "5a95285b1f"
+rtlViewpager = "940f12724f"
+kotlinxSerializationJson = "1.5.1"
+kotlinxImmutableCollections = "0.3.6"
 #build
 app-build-compileSDKVersion = "34"
 app-build-targetSDK = "33"
@@ -49,14 +72,36 @@ subsamplingScaleImageView = "80efdaa570"
 androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3Exoplayer" }
 androidx-swiperefreshlayout = { module = "androidx.swiperefreshlayout:swiperefreshlayout", version.ref = "androidx-swiperefreshlayout" }
 androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "androidx-constraintlayout" }
+androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "androidx-appcompat" }
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-coreKtx" }
+androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "androidx-documentfile" }
+androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "androidx-exifinterface" }
+androidx-biometric-ktx = { module = "androidx.biometric:biometric-ktx", version.ref = "androidx-biometricKtx" }
+androidx-customview = { module = "androidx.customview:customview", version.ref = "androidx-customView" }
+androidx-customview-poolingcontainer = { module = "androidx.customview:customview-poolingcontainer", version.ref = "androidx-customViewPooling" }
+#AndroidX lifecycle
+androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "androidx-lifecycle" }
+androidx-lifecycle-viewmodel-ktx = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "androidx-lifecycle" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "androidx-lifecycle" }
+#Compose
+compose-activity = { module = "androidx.activity:activity-compose", version.ref = "composeActivity" }
+compose-animation = { module = "androidx.compose.animation:animation", version.ref = "compose" }
+compose-foundation = { module = "androidx.compose.foundation:foundation", version.ref = "compose" }
+compose-material = { module = "androidx.compose.material:material", version.ref = "compose" }
+compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended", version.ref = "compose" }
+compose-material3 = { module = "androidx.compose.material3:material3", version.ref = "composeMaterial3" }
+compose-runtime = { module = "androidx.compose.runtime:runtime", version.ref = "compose" }
+compose-ui = { module = "androidx.compose.ui:ui", version.ref = "compose" }
+compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling", version.ref = "compose" }
+compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview", version.ref = "compose" }
+compose-ui-viewbinding = { module = "androidx.compose.ui:ui-viewbinding", version.ref = "compose" }
 #exif
 exif = { module = "it.sephiroth.android.exif:library", version.ref = "exif" }
 #Room
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
-#Simple Mobile Tools
-simple-tools-commons = { module = "com.github.SimpleMobileTools:Simple-Commons", version.ref = "simple-commons" }
 #Other
 android-gif-drawable = { module = "pl.droidsonroids.gif:android-gif-drawable", version.ref = "androidGifDrawable" }
 android-image-cropper = { module = "com.vanniktech:android-image-cropper", version.ref = "androidImageCropper" }
@@ -71,16 +116,56 @@ sdk-videowidget = { module = "com.google.vr:sdk-videowidget", version.ref = "sdk
 sdk-panowidget = { module = "com.google.vr:sdk-panowidget", version.ref = "sdkPanowidget" }
 apng = { module = "com.github.penfeizhou.android.animation:apng", version.ref = "apng" }
 awebp = { module = "com.github.penfeizhou.android.animation:awebp", version.ref = "awebp" }
-glide-compiler = { module = "com.github.bumptech.glide:ksp", version.ref = "glideCompiler" }
 zjupure-webpdecoder = { module = "com.github.zjupure:webpdecoder", version.ref = "zjupureWebpdecoder" }
 picasso = { module = "com.squareup.picasso:picasso", version.ref = "picasso" }
+#Glide
+glide = { module = "com.github.bumptech.glide:glide", version.ref = "glide" }
+glide-compose = { module = "com.github.bumptech.glide:compose", version.ref = "glideCompose" }
+glide-compiler = { module = "com.github.bumptech.glide:ksp", version.ref = "glide" }
+#Material
+material = { module = "com.google.android.material:material", version.ref = "material" }
+#Helper views & parsers used by the vendored commons module
+pattern-lock-view = { module = "com.github.aritraroy:patternLockView", version.ref = "patternLockView" }
+reprint = { module = "com.github.tibbi:reprint", version.ref = "reprint" }
+recyclerview-fastscroller = { module = "com.github.tibbi:RecyclerView-FastScroller", version.ref = "recyclerviewFastscroller" }
+rtl-viewpager = { module = "com.github.duolingo:rtl-viewpager", version.ref = "rtlViewpager" }
+ez-vcard = { module = "com.googlecode.ez-vcard:ez-vcard", version.ref = "ezVcard" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+joda-time = { module = "joda-time:joda-time", version.ref = "jodaTime" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+kotlinx-collections-immutable = { module = "org.jetbrains.kotlinx:kotlinx-collections-immutable", version.ref = "kotlinxImmutableCollections" }
 [bundles]
 room = [
     "androidx-room-ktx",
     "androidx-room-runtime",
 ]
+compose = [
+    "compose-activity",
+    "compose-animation",
+    "compose-foundation",
+    "compose-material",
+    "compose-material-icons-extended",
+    "compose-material3",
+    "compose-runtime",
+    "compose-ui",
+    "compose-ui-tooling-preview",
+]
+compose-preview = [
+    "androidx-customview",
+    "androidx-customview-poolingcontainer",
+    "compose-ui-tooling",
+]
+lifecycle = [
+    "androidx-lifecycle-runtime-compose",
+    "androidx-lifecycle-runtime-ktx",
+    "androidx-lifecycle-viewmodel-ktx",
+    "androidx-lifecycle-viewmodel-compose",
+]
 [plugins]
 android = { id = "com.android.application", version.ref = "gradlePlugins-agp" }
+androidLibrary = { id = "com.android.library", version.ref = "gradlePlugins-agp" }
 kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 imgly = { id = "ly.img.android.sdk", version.ref = "imgly" }

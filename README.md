@@ -32,7 +32,7 @@
 ### 其他调整
 
 - 依赖 `net.zetetic:android-database-sqlcipher:4.5.4`，并为其添加 ProGuard keep 规则。
-- `simple-commons` 更新至 `ea86877113`。
+- `Simple-Commons` 不再从 JitPack 拉取 AAR，源码已内联为仓库内的 Gradle 模块 `commons/`（对应上游提交 `ea86877113`）；如需同步上游，直接替换该目录内容即可，`app` 通过 `implementation(project(":commons"))` 依赖。
 - `settings.gradle.kts` 增加本地 Maven 镜像（`file:///C:/Users/45574/.gradle/local-m2`），用于承载已无法从原始仓库解析的旧工件（jcenter 已下线、Google VR SDK 已从 Google Maven 移除、部分 JitPack 构建失败）——在其他机器构建时需按注释调整该路径。
 
 ## 构建
@@ -46,7 +46,8 @@
 ```
 
 - 签名配置读取根目录 `keystore.properties`（模板见 `keystore.properties_sample`）。
-- 编译需 JDK 17，Gradle 8.2.1 / AGP 7.4.0，compileSdk 34。
+- 编译需 JDK 17，Gradle 8.2.1 / AGP 8.1.2，compileSdk 34。
+- 内联的 `commons` 模块使用 Compose，需 Kotlin 1.9.10 + Compose Compiler 1.5.3（版本统一在 `gradle/libs.versions.toml` 管理）。
 
 ## 原版简介
 
